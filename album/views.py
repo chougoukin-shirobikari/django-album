@@ -1,5 +1,6 @@
-from django.shortcuts import get_object_or_404
-from django.views.generic import ListView, DetailView
+from django.shortcuts import get_object_or_404, redirect
+from django.views.generic import ListView, DetailView, CreateView
+from django.urls import reverse_lazy
 
 from .models import Tag, Photo
 
@@ -26,9 +27,36 @@ class TagPhotoListView(ListView):
     model = Photo
     template_name = "album/tag_photo.html"
     context_object_name = "photos"
+    
+    def get_context_data(self, *args, **kwargs):
+        context = super().get_context_data(*args, **kwargs)
 
-    def get_queryset(self, **kwargs):
         tag_name = self.kwargs["tag"]
-        tag = get_object_or_404(Tag, name=tag_name)
+        tag_name = get_object_or_404(Tag, name=tag_name)
 
-        return super().get_queryset().filter(tags=tag)
+        photos = Photo.objects.filter(tags=tag_name)
+
+        context["tag"] = tag_name
+        context["photos"] = photos
+
+        return context
+
+class PhotoCreateView(CreateView):
+    model = Photo
+    template_name = "album/photo_create.html"
+    fields = "__all__"
+    success_url = reverse_lazy("photo-list")
+
+    def form_valid(self, form):
+        photo = form.save()
+        new_tag = self.request.POST.get("new_tag")
+
+        if new_tag:
+            for tag in new_tag.split():
+                is_exists = Tag.objects.filter(name=tag)
+
+                if not is_exists:
+                    Tag.objects.create(name=tag)
+                photo.tags.add(tag)
+        
+        return redirect("photo-list")
